@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-main/
+release/
+.DS_Store
+*.log
+.env*
+.local-data/
+qa/
+release-*/
+key.enc
+settings.json
+reports/
+resources/icon.iconset/

@@ -1,0 +1,52 @@
+{
+  "name": "walnutmatch",
+  "version": "0.1.1",
+  "private": true,
+  "description": "文玩核桃六面配对参考工具",
+  "author": "WalnutMatch",
+  "main": "dist-main/electron/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.json && vite build",
+    "start": "npm run build && electron .",
+    "test": "tsc -p tsconfig.main.json && node --test dist-main/tests/*.test.js",
+    "test:desktop": "npm run build && node scripts/smoke.cjs",
+    "pack": "npm run build && electron-builder --mac dir --arm64",
+    "dist": "npm run build && electron-builder --mac zip --arm64"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "electron": "44.5.1",
+    "electron-builder": "^26.0.0",
+    "playwright-core": "^1.63.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0"
+  },
+  "build": {
+    "appId": "cn.walnutmatch.desktop",
+    "productName": "WalnutMatch",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-main/core/**/*",
+      "dist-main/electron/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "identity": null,
+      "icon": "resources/icon.png",
+      "target": [
+        "zip"
+      ]
+    },
+    "artifactName": "WalnutMatch-${version}-${arch}.${ext}"
+  }
+}

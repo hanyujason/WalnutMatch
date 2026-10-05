@@ -1,0 +1,22 @@
+export const VIEWS = ['front', 'back', 'left', 'right', 'top', 'bottom'] as const;
+export type View = typeof VIEWS[number];
+export const VIEW_NAMES: Record<View, string> = { front: '肚面一', back: '肚面二', left: '棱边一', right: '棱边二', top: '顶部', bottom: '底部' };
+export type Dimensions = { edge: number; belly: number; height: number };
+export type PairInput = { name: string; variety: string; dimensions: [Dimensions, Dimensions]; images: Record<View, string> };
+export type Quality = { view: View; usable: boolean; severity: 'none' | 'minor' | 'major'; issues: string[] };
+export type Metric = { id: string; level: number | null; reason: string; evidence: View[] };
+export type Analysis = { summary: string; views: { view: View; similarities: string; differences: string }[]; quality: Quality[]; metrics: Metric[] };
+export type Score = { visual: number | null; shape: number; texture: number; penalty: number; final: number | null; grade: string | null; sizeMismatch: boolean; confidence: '高' | '中' | '低'; partial: boolean; differences: Dimensions; items: { id: string; name: string; weight: number; points: number | null; reason: string }[] };
+export type Settings = { baseUrl: string; model: string; protocol: 'responses' | 'chat'; strict: boolean; hasKey: boolean };
+export type Report = { id: string; createdAt: string; input: PairInput; analysis: Analysis; score: Score; model: string; endpoint: string; protocol: string; ruleVersion: string; promptVersion: string; demo: boolean; usage: unknown };
+export type Bridge = {
+  settings: () => Promise<Settings>;
+  saveSettings: (s: Omit<Settings, 'hasKey'> & { apiKey: string; clearKey?: boolean }) => Promise<Settings>;
+  testConnection: () => Promise<string>;
+  analyze: (input: PairInput) => Promise<Report>;
+  cancel: () => Promise<void>;
+  history: () => Promise<Report[]>;
+  exportReport: (id: string, format: 'json' | 'md') => Promise<boolean>;
+  deleteReport: (id: string) => Promise<void>;
+  sample: () => Promise<PairInput | null>;
+};
