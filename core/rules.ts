@@ -1,5 +1,5 @@
 import { Analysis, Dimensions, Score, VIEWS } from './types';
-export const RULE_VERSION = '0.1.0';
+export const RULE_VERSION = '0.1.2';
 export const METRICS = [
   { id: 'outline', name: '整体轮廓与桩型', weight: 20, group: 'shape', hint: '高宽比例、胖瘦、轮廓收放' },
   { id: 'shoulder', name: '肩部与肚部', weight: 10, group: 'shape', hint: '肩高、坡度、饱满度、肚部鼓起位置与弧度' },
@@ -28,7 +28,7 @@ export function validateDimensions(dimensions: unknown): asserts dimensions is [
     if (!d || typeof d[k] !== 'number' || !Number.isFinite(d[k]) || d[k] <= 0 || d[k] > 100) throw new Error('尺寸须为大于 0 且不超过 100 的毫米数');
   }
 }
-export function scoreAnalysis(a: Analysis, ds: [Dimensions, Dimensions]): Score {
+export function scoreAnalysis(a: Analysis, ds: [Dimensions, Dimensions], estimatePartial = false): Score {
   validateDimensions(ds);
   const differences = { edge: Math.round(Math.abs(ds[0].edge - ds[1].edge) * 1e6) / 1e6, belly: Math.round(Math.abs(ds[0].belly - ds[1].belly) * 1e6) / 1e6, height: Math.round(Math.abs(ds[0].height - ds[1].height) * 1e6) / 1e6 };
   const rawPenalty = Object.values(differences).reduce((sum, d) => sum + sizePenalty(d), 0);
@@ -44,8 +44,13 @@ export function scoreAnalysis(a: Analysis, ds: [Dimensions, Dimensions]): Score 
   const partial = unusable || items.some(x => x.points === null);
   const shape = Math.round(items.slice(0, 6).reduce((s, x) => s + (x.points ?? 0), 0) * 100) / 100;
   const texture = Math.round(items.slice(6).reduce((s, x) => s + (x.points ?? 0), 0) * 100) / 100;
-  const visual = partial ? null : round(items.reduce((s, x) => s + x.points!, 0));
-  const rawFinal = partial ? null : Math.max(0, items.reduce((s, x) => s + x.points!, 0) - rawPenalty);
+  const assessed = items.filter(x => x.points !== null);
+  const assessedPoints = assessed.reduce((sum, x) => sum + x.points!, 0);
+  const assessedMax = assessed.reduce((sum, x) => sum + x.weight, 0);
+  const estimated = partial && estimatePartial && assessedMax > 0;
+  const rawVisual = !partial ? assessedPoints : estimated ? assessedPoints / assessedMax * 100 : null;
+  const visual = rawVisual === null ? null : round(rawVisual);
+  const rawFinal = rawVisual === null ? null : Math.max(0, rawVisual - rawPenalty);
   const final = rawFinal === null ? null : round(rawFinal);
-  return { visual, shape, texture, penalty, final, grade: rawFinal === null ? null : sizeMismatch ? 'D' : gradeFor(rawFinal), sizeMismatch, confidence: partial || major ? '低' : a.quality.some(q => q.severity === 'minor') ? '中' : '高', partial, differences, items };
+  return { visual, shape, texture, penalty, final, grade: rawFinal === null ? null : sizeMismatch ? 'D' : gradeFor(rawFinal), sizeMismatch, confidence: partial || major ? '低' : a.quality.some(q => q.severity === 'minor') ? '中' : '高', partial, estimated, assessedPoints: Math.round(assessedPoints * 100) / 100, assessedMax, differences, items };
 }

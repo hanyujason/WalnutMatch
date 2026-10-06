@@ -1,3 +1,4 @@
+import { validatePhotoEvidence } from '../core/analysis';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gradeFor, scoreAnalysis, sizePenalty } from '../core/rules';
@@ -43,4 +44,23 @@ test('结构错误指出固定字段，空数组成员不会造成未处理异�
   assert.throws(()=>parseAnalysis(JSON.stringify({summary:'说明',views:[],metrics:[]})),/quality/);
   const a:any=fixture();a.views[0]=null;assert.throws(()=>parseAnalysis(JSON.stringify(a)),/六个视角/);
   const b:any=fixture();b.metrics[0]=null;assert.throws(()=>parseAnalysis(JSON.stringify(b)),/指标/);
+});
+
+test('缺失照片不可被模型补成满分证据，已有项目保留得分',()=>{
+  const pair=input();pair.images.back='';pair.images.left='';pair.images.right='';
+  const a=validatePhotoEvidence(fixture(),pair);
+  const s=scoreAnalysis(a,pair.dimensions);
+  assert.equal(s.final,null);assert.equal(s.grade,null);assert.equal(s.confidence,'低');
+  assert.equal(s.items[0].points,18);assert.equal(a.quality.find(q=>q.view==='left')?.usable,false);
+  const bad=fixture();bad.metrics[0].evidence=['left'];assert.throws(()=>validatePhotoEvidence(bad,pair),/未上传/);
+  pair.images.top='';const noTop=validatePhotoEvidence(fixture(),pair);assert.equal(noTop.metrics.find(m=>m.id==='top')?.level,null);
+});
+
+test('暂评按可评权重折算再扣尺寸差，全未知不出分',()=>{
+  const a=fixture(1);a.metrics.find(m=>m.id==='edge')!.level=null;a.quality[0].usable=false;
+  const s=scoreAnalysis(a,input().dimensions,true);
+  assert.equal(s.assessedPoints,81);assert.equal(s.assessedMax,90);assert.equal(s.final,90);assert.equal(s.grade,'A');assert.equal(s.estimated,true);assert.equal(s.confidence,'低');
+  const mismatch=scoreAnalysis(a,[{edge:39,belly:40,height:40},{edge:41,belly:40,height:40}],true);
+  assert.equal(mismatch.final,78);assert.equal(mismatch.grade,'D');
+  a.metrics.forEach(m=>m.level=null);const empty=scoreAnalysis(a,input().dimensions,true);assert.equal(empty.final,null);assert.equal(empty.grade,null);assert.equal(empty.estimated,false);
 });

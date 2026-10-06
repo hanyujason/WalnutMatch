@@ -9,7 +9,7 @@
 - 显示逐项扣分依据、拍摄质量和评价可信度，保存历史并导出中文报告。
 - 自行配置 API 地址、模型及密钥；支持 Responses 和 Chat Completions 协议。
 
-当前版本 **0.1.1**，提供 macOS Apple Silicon（M 系列芯片）安装包，见 [Releases](https://github.com/hanyujason/WalnutMatch/releases)。解压后打开 WalnutMatch.app；应用尚未签名和公证。Windows、Intel Mac 和 Linux 暂未提供经过验证的安装包。
+当前版本 **0.1.2**，提供 macOS Apple Silicon（M 系列芯片）安装包，见 [Releases](https://github.com/hanyujason/WalnutMatch/releases)。解压后打开 WalnutMatch.app；应用尚未签名和公证。Windows、Intel Mac 和 Linux 暂未提供经过验证的安装包。
 
 [使用说明](docs/使用说明.md) · [验证记录](docs/验证记录.md) · [版本记录](CHANGELOG.md)
 
@@ -19,9 +19,13 @@
 
 文本连接测试成功仅说明文本请求可用；视觉分析必须使用支持图像输入的模型。分析时照片发送到配置的服务商，报告与配置保存在本机，密钥使用 Electron safeStorage 加密保存。
 
+### 本地目录与版本保存
+
+持续在同一个 WalnutMatch 项目目录开发，`release/` 只存最新安装包。源码历史通过 Git 提交保存，完成检查后 push 到 GitHub；可运行版本通过 GitHub Releases 保存。安装包和源码分别管理，避免把大文件提交进 Git。
+
 ### 评分原则与边界
 
-形状占 60 分、纹路占 40 分，尺寸差另外扣分；照片证据不足时不给完整总分。可信度表示照片支持判断的程度，不是准确率。价格、商家评级、色差、磕碰和黄尖不参与本版评分。
+形状占 60 分、纹路占 40 分，尺寸差另外扣分；照片不完整时根据可判断项目折算估算分数和等级，明确标为暂评；全部无法判断时不出分。可信度表示照片支持判断的程度，不是准确率。价格、商家评级、色差、磕碰和黄尖不参与本版评分。
 
 首个真实样本得到 88.5 分、A级，与用户的参考判断一致；这只证明一次实际流程已跑通，不代表评分准确率或重复稳定性已经验证。规则为实验草案，结果仅供配对参考，不构成鉴定或价格评估。
 

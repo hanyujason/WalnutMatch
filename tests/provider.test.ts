@@ -47,3 +47,13 @@ test('兼容JSON模式在两种协议中显式提供完整结构和示例', () =
     assert.ok(prompt.includes('不能照抄'));
   }
 });
+
+test('部分照片只发送实际上传图片，两种协议显式列出缺失视角',()=>{
+  const pair=input(); pair.images.back='';pair.images.left='';pair.images.right='';
+  for (const protocol of ['chat','responses'] as const) {
+    const b:any=requestBody({...settings,protocol,strict:false},pair);
+    const content=protocol==='chat'?b.messages[1].content:b.input[0].content;
+    assert.equal(content.filter((x:any)=>['image_url','input_image'].includes(x.type)).length,3);
+    assert.match(content[0].text,/未上传视角：back、left、right/);
+  }
+});

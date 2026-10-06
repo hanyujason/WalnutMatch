@@ -23,8 +23,10 @@ function validateInput(input: PairInput) {
   validateDimensions(input.dimensions);
   for (const v of VIEWS) {
     const image = input.images?.[v];
-    if (typeof image !== 'string' || image.length > 8 * 1024 * 1024 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) throw new Error('请为六个视角各导入一张有效图片（单张小于 6MB）');
+    if (image === '' || image === undefined) continue;
+    if (typeof image !== 'string' || image.length > 8 * 1024 * 1024 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) throw new Error('请导入有效图片（单张小于 6MB）');
   }
+  if (!VIEWS.some(v => input.images?.[v])) throw new Error('请至少导入一张两颗同框的照片');
 }
 async function history(): Promise<Report[]> {
   let names: string[];
@@ -34,7 +36,7 @@ async function history(): Promise<Report[]> {
 }
 function reportMarkdown(r: Report) {
   const s = r.score;
-  return `# ${r.input.name || '核桃配对报告'}\n\n${r.demo ? '**离线演示，不是真实模型评分。**\n\n' : ''}时间：${r.createdAt}\n\n品种：${r.input.variety || '未填写'}\n\n模型：${r.model}；规则：${r.ruleVersion}；提示词：${r.promptVersion}\n\n最终分：${s.final ?? '未生成'}；等级：${s.grade ?? '暂评'}；可信度：${s.confidence}\n\n视觉基础分：${s.visual ?? '证据不足'}；尺寸扣分：${s.penalty}；尺寸不适配：${s.sizeMismatch ? '是' : '否'}\n\n${r.analysis.summary}\n\n|指标|得分|满分|依据|\n|---|---:|---:|---|\n${s.items.map(i => `|${i.name}|${i.points === null ? '无法判断' : i.points.toFixed(2)}|${i.weight}|${i.reason.replace(/\|/g, '／').replace(/\n/g, ' ')}|`).join('\n')}\n\n## 实测尺寸（毫米）\n${JSON.stringify(r.input.dimensions)}\n\n差值：${JSON.stringify(s.differences)}\n\n## 六面对比\n${r.analysis.views.map(v => `### ${VIEW_NAMES[v.view]}\n相似：${v.similarities}\n\n差异：${v.differences}`).join('\n\n')}\n\n## 照片质量\n${r.analysis.quality.map(q => `${VIEW_NAMES[q.view]}：${q.issues.join('；') || '未报告明显拍摄问题'}`).join('\n\n')}\n\n本报告仅供配对参考，不构成品相鉴定或价格评估。可信度描述证据充分程度，不是统计准确率。\n`;
+  return `# ${r.input.name || '核桃配对报告'}\n\n${r.demo ? '**离线演示，不是真实模型评分。**\n\n' : ''}时间：${r.createdAt}\n\n品种：${r.input.variety || '未填写'}\n\n模型：${r.model}；规则：${r.ruleVersion}；提示词：${r.promptVersion}\n\n${s.estimated ? '暂评估算分' : '最终分'}：${s.final ?? '未生成'}；等级：${s.grade ?? '暂评'}；可信度：${s.confidence}\n\n视觉基础分：${s.visual ?? '证据不足'}；尺寸扣分：${s.penalty}；尺寸不适配：${s.sizeMismatch ? '是' : '否'}\n\n${r.analysis.summary}\n\n${s.estimated ? `暂评：可判断项目 ${s.assessedPoints}/${s.assessedMax}，按比例折算到100分后扣尺寸差；未观察的部分可能改变结果，暂评等级不等于完整评级。\n\n` : ''}|指标|得分|满分|依据|\n|---|---:|---:|---|\n${s.items.map(i => `|${i.name}|${i.points === null ? '无法判断' : i.points.toFixed(2)}|${i.weight}|${i.reason.replace(/\|/g, '／').replace(/\n/g, ' ')}|`).join('\n')}\n\n## 实测尺寸（毫米）\n${JSON.stringify(r.input.dimensions)}\n\n差值：${JSON.stringify(s.differences)}\n\n## 六面对比\n${r.analysis.views.map(v => `### ${VIEW_NAMES[v.view]}\n相似：${v.similarities}\n\n差异：${v.differences}`).join('\n\n')}\n\n## 照片质量\n${r.analysis.quality.map(q => `${VIEW_NAMES[q.view]}：${q.issues.join('；') || '未报告明显拍摄问题'}`).join('\n\n')}\n\n本报告仅供配对参考，不构成品相鉴定或价格评估。可信度描述证据充分程度，不是统计准确率。\n`;
 }
 function handle(name: string, fn: (...args: any[]) => Promise<any>) {
   ipcMain.handle(name, async (event, ...args) => {
@@ -70,7 +72,7 @@ function register() {
     validateInput(input);
     const { result, config } = await request(input);
     const analysis = result.analysis as Analysis;
-    const report: Report = { id: randomUUID(), createdAt: new Date().toISOString(), input, analysis, score: scoreAnalysis(analysis, input.dimensions), model: config.model, endpoint: config.baseUrl, protocol: config.protocol, ruleVersion: RULE_VERSION, promptVersion: PROMPT_VERSION, demo: false, usage: result.usage };
+    const report: Report = { id: randomUUID(), createdAt: new Date().toISOString(), input, analysis, score: scoreAnalysis(analysis, input.dimensions, true), model: config.model, endpoint: config.baseUrl, protocol: config.protocol, ruleVersion: RULE_VERSION, promptVersion: PROMPT_VERSION, demo: false, usage: result.usage };
     await writeJson(dataPath('reports', report.id + '.json'), report);
     return report;
   });

@@ -1,5 +1,5 @@
 import { Analysis, PairInput, Settings, VIEWS, VIEW_NAMES } from './types';
-import { ANALYSIS_SCHEMA, parseAnalysis, analysisPrompt } from './analysis';
+import { ANALYSIS_SCHEMA, parseAnalysis, analysisPrompt, validatePhotoEvidence } from './analysis';
 export function normalizeBaseUrl(value: string): string {
   let u: URL;
   try { u = new URL(value.trim()); } catch { throw new Error('请填写完整 API 地址，例如 https://api.openai.com/v1'); }
@@ -10,14 +10,14 @@ export function normalizeBaseUrl(value: string): string {
 }
 export function requestBody(s: Settings, input?: PairInput): unknown {
   const prompt = input ? analysisPrompt(s.strict) : '连接测试。请用中文回复“连接成功”。';
-  const message = input ? `核桃品种：${input.variety || '未填写'}。只比较照片中的形状与纹路。尺寸由程序另行处理。` : '这是一次文本连接测试，不检测图像能力。';
+  const message = input ? `核桃品种：${input.variety || '未填写'}。只比较照片中的形状与纹路。尺寸由程序另行处理。已上传视角：${VIEWS.filter(v => input.images[v]).join('、')}；未上传视角：${VIEWS.filter(v => !input.images[v]).join('、') || '无'}。只引用已上传视角作为evidence。` : '这是一次文本连接测试，不检测图像能力。';
   if (s.protocol === 'responses') {
     const content: any[] = [{ type: 'input_text', text: message }];
-    if (input) for (const v of VIEWS) content.push({ type: 'input_text', text: VIEW_NAMES[v] }, { type: 'input_image', image_url: input.images[v], detail: 'high' });
+    if (input) for (const v of VIEWS.filter(v => input.images[v])) content.push({ type: 'input_text', text: `${v}（${VIEW_NAMES[v]}）` }, { type: 'input_image', image_url: input.images[v], detail: 'high' });
     return { model: s.model, store: false, instructions: prompt, input: [{ role: 'user', content }], max_output_tokens: input ? 10000 : 128, ...(input ? { text: { format: s.strict ? { type: 'json_schema', name: 'walnut_analysis', strict: true, schema: ANALYSIS_SCHEMA } : { type: 'json_object' } } } : {}) };
   }
   const content: any[] = [{ type: 'text', text: message }];
-  if (input) for (const v of VIEWS) content.push({ type: 'text', text: VIEW_NAMES[v] }, { type: 'image_url', image_url: { url: input.images[v], detail: 'high' } });
+  if (input) for (const v of VIEWS.filter(v => input.images[v])) content.push({ type: 'text', text: `${v}（${VIEW_NAMES[v]}）` }, { type: 'image_url', image_url: { url: input.images[v], detail: 'high' } });
   return { model: s.model, messages: [{ role: 'system', content: prompt }, { role: 'user', content }], ...(input ? { response_format: s.strict ? { type: 'json_schema', json_schema: { name: 'walnut_analysis', strict: true, schema: ANALYSIS_SCHEMA } } : { type: 'json_object' } } : {}) };
 }
 export async function callProvider(s: Settings, key: string, signal: AbortSignal, input?: PairInput): Promise<{ analysis?: Analysis; usage: unknown }> {
@@ -49,5 +49,5 @@ export async function callProvider(s: Settings, key: string, signal: AbortSignal
     text = data.choices?.[0]?.message?.content ?? '';
   }
   if (!text || typeof text !== 'string') throw new Error('API 没有返回可用的文本结果');
-  return { analysis: input ? parseAnalysis(text) : undefined, usage: data.usage ?? null };
+  return { analysis: input ? validatePhotoEvidence(parseAnalysis(text), input) : undefined, usage: data.usage ?? null };
 }
