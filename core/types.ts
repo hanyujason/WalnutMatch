@@ -1,12 +1,19 @@
 export const VIEWS = ['front', 'back', 'left', 'right', 'top', 'bottom'] as const;
-export type View = typeof VIEWS[number];
-export const VIEW_NAMES: Record<View, string> = { front: '肚面一', back: '肚面二', left: '棱边一', right: '棱边二', top: '顶部', bottom: '底部' };
-export type Dimensions = { edge: number; belly: number; height: number };
-export type PairInput = { name: string; variety: string; dimensions: [Dimensions, Dimensions]; images: Record<View, string> };
+export const THREE_VIEWS = ['front', 'back', 'side3', 'left', 'right', 'edge3', 'top', 'bottom'] as const;
+export const ALL_VIEWS = ['front', 'back', 'side3', 'left', 'right', 'edge3', 'top', 'bottom'] as const;
+export type View = typeof ALL_VIEWS[number];
+export type WalnutType = 'two' | 'three';
+export const VIEW_NAMES: Record<View, string> = { front: '肚面一', back: '肚面二', side3: '侧面三', left: '棱边一', right: '棱边二', edge3: '棱边三', top: '顶部', bottom: '底部' };
+export const viewsFor = (type?: WalnutType): readonly View[] => type === 'three' ? THREE_VIEWS : VIEWS;
+export const viewName = (view: View, type?: WalnutType) => type === 'three' && view === 'front' ? '侧面一' : type === 'three' && view === 'back' ? '侧面二' : VIEW_NAMES[view];
+export type Dimensions = { edge: number | null; belly: number | null; height: number | null };
+export type Detail = { id: string; text: string; target: 'unknown' | 'left' | 'right' | 'both'; position: string; image: string };
+export type Evidence = View | `detail:${string}`;
+export type PairInput = { name: string; variety: string; walnutType?: WalnutType; details?: Detail[]; dimensions: [Dimensions, Dimensions]; images: Partial<Record<View, string>> };
 export type Quality = { view: View; usable: boolean; severity: 'none' | 'minor' | 'major'; issues: string[] };
-export type Metric = { id: string; level: number | null; reason: string; evidence: View[] };
-export type Analysis = { summary: string; views: { view: View; similarities: string; differences: string }[]; quality: Quality[]; metrics: Metric[] };
-export type Score = { visual: number | null; shape: number; texture: number; penalty: number; final: number | null; grade: string | null; sizeMismatch: boolean; confidence: '高' | '中' | '低'; partial: boolean; estimated?: boolean; assessedPoints?: number; assessedMax?: number; differences: Dimensions; items: { id: string; name: string; weight: number; points: number | null; reason: string }[] };
+export type Metric = { id: string; level: number | null; reason: string; evidence: Evidence[] };
+export type Analysis = { summary: string; views: { view: View; similarities: string; differences: string }[]; quality: Quality[]; metrics: Metric[]; details?: { id: string; observation: string }[] };
+export type Score = { visual: number | null; shape: number; texture: number; penalty: number; final: number | null; grade: string | null; sizeMismatch: boolean; confidence: '高' | '中' | '低'; partial: boolean; estimated?: boolean; assessedPoints?: number; assessedMax?: number; sizeMode?: 'none' | 'partial' | 'full'; differences: Dimensions; items: { id: string; name: string; weight: number; points: number | null; reason: string }[] };
 export type Settings = { baseUrl: string; model: string; protocol: 'responses' | 'chat'; strict: boolean; hasKey: boolean };
 export type Report = { id: string; createdAt: string; input: PairInput; analysis: Analysis; score: Score; model: string; endpoint: string; protocol: string; ruleVersion: string; promptVersion: string; demo: boolean; usage: unknown };
 export type Bridge = {

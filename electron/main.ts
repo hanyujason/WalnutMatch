@@ -2,9 +2,10 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage } from 'electron
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { Analysis, PairInput, Report, Settings, VIEWS, VIEW_NAMES } from '../core/types';
+import { Analysis, PairInput, Report, Settings, viewName } from '../core/types';
 import { normalizeBaseUrl, callProvider } from '../core/provider';
-import { RULE_VERSION, scoreAnalysis, validateDimensions } from '../core/rules';
+import { RULE_VERSION, scoreAnalysis } from '../core/rules';
+import { validateInput } from '../core/input';
 import { PROMPT_VERSION } from '../core/analysis';
 
 app.setName('WalnutMatch');
@@ -18,16 +19,6 @@ async function readJson(file: string, fallback: any): Promise<any> { try { retur
 async function writeJson(file: string, value: unknown) { await fs.mkdir(path.dirname(file), { recursive: true }); const tmp = file + '.' + randomUUID() + '.tmp'; await fs.writeFile(tmp, JSON.stringify(value, null, 2), { mode: 0o600 }); await fs.rename(tmp, file); }
 async function settings(): Promise<Settings> { const s = await readJson(dataPath('settings.json'), defaults); let hasKey = false; try { await fs.access(dataPath('key.enc')); hasKey = true; } catch {} return { ...defaults, ...s, hasKey }; }
 async function apiKey(): Promise<string> { try { return (await safeStorage.decryptStringAsync(await fs.readFile(dataPath('key.enc')))).result; } catch (e: any) { if (e.code === 'ENOENT') return ''; throw new Error('无法解密已保存密钥，请在设置中重新填写'); } }
-function validateInput(input: PairInput) {
-  if (!input || typeof input.name !== 'string' || input.name.length > 120 || typeof input.variety !== 'string' || input.variety.length > 80) throw new Error('样本名称或品种无效');
-  validateDimensions(input.dimensions);
-  for (const v of VIEWS) {
-    const image = input.images?.[v];
-    if (image === '' || image === undefined) continue;
-    if (typeof image !== 'string' || image.length > 8 * 1024 * 1024 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) throw new Error('请导入有效图片（单张小于 6MB）');
-  }
-  if (!VIEWS.some(v => input.images?.[v])) throw new Error('请至少导入一张两颗同框的照片');
-}
 async function history(): Promise<Report[]> {
   let names: string[];
   try { names = await fs.readdir(dataPath('reports')); } catch (e: any) { if (e.code === 'ENOENT') return []; throw e; }
@@ -36,7 +27,10 @@ async function history(): Promise<Report[]> {
 }
 function reportMarkdown(r: Report) {
   const s = r.score;
-  return `# ${r.input.name || '核桃配对报告'}\n\n${r.demo ? '**离线演示，不是真实模型评分。**\n\n' : ''}时间：${r.createdAt}\n\n品种：${r.input.variety || '未填写'}\n\n模型：${r.model}；规则：${r.ruleVersion}；提示词：${r.promptVersion}\n\n${s.estimated ? '暂评估算分' : '最终分'}：${s.final ?? '未生成'}；等级：${s.grade ?? '暂评'}；可信度：${s.confidence}\n\n视觉基础分：${s.visual ?? '证据不足'}；尺寸扣分：${s.penalty}；尺寸不适配：${s.sizeMismatch ? '是' : '否'}\n\n${r.analysis.summary}\n\n${s.estimated ? `暂评：可判断项目 ${s.assessedPoints}/${s.assessedMax}，按比例折算到100分后扣尺寸差；未观察的部分可能改变结果，暂评等级不等于完整评级。\n\n` : ''}|指标|得分|满分|依据|\n|---|---:|---:|---|\n${s.items.map(i => `|${i.name}|${i.points === null ? '无法判断' : i.points.toFixed(2)}|${i.weight}|${i.reason.replace(/\|/g, '／').replace(/\n/g, ' ')}|`).join('\n')}\n\n## 实测尺寸（毫米）\n${JSON.stringify(r.input.dimensions)}\n\n差值：${JSON.stringify(s.differences)}\n\n## 六面对比\n${r.analysis.views.map(v => `### ${VIEW_NAMES[v.view]}\n相似：${v.similarities}\n\n差异：${v.differences}`).join('\n\n')}\n\n## 照片质量\n${r.analysis.quality.map(q => `${VIEW_NAMES[q.view]}：${q.issues.join('；') || '未报告明显拍摄问题'}`).join('\n\n')}\n\n本报告仅供配对参考，不构成品相鉴定或价格评估。可信度描述证据充分程度，不是统计准确率。\n`;
+  const dim = (n: number | null) => n === null ? '未提供' : String(n);
+  const safe = (text: string) => text.replace(/\|/g, '／').replace(/\n/g,' ');
+  const sizeLabel = s.sizeMode === 'none' ? '仅视觉评级；未提供可比较尺寸，未计尺寸扣分' : s.sizeMode === 'partial' ? '部分尺寸比较；未填写项不参与扣分' : '包含尺寸比较的评级';
+  return `# ${r.input.name || '核桃配对报告'}\n\n${r.demo ? '**离线演示，不是真实模型评分。**\n\n' : ''}时间：${r.createdAt}\n\n品种：${r.input.variety || '未填写'}；类型：${r.input.walnutType === 'three' ? '三棱' : '两棱'}\n\n模型：${r.model}；规则：${r.ruleVersion}；提示词：${r.promptVersion}\n\n${s.estimated ? '暂评估算分' : '最终分'}：${s.final ?? '未生成'}；等级：${s.estimated ? '暂评 ' : ''}${s.grade ?? '暂缺'}；照片可信度：${s.confidence}\n\n${sizeLabel}\n\n视觉基础分：${s.visual ?? '证据不足'}；尺寸扣分：${s.penalty}；尺寸不适配：${s.sizeMismatch ? '是' : '否'}\n\n${r.analysis.summary}\n\n${s.estimated ? `暂评：已评项目 ${s.assessedPoints}/${s.assessedMax}，按比例折算到100分后扣尺寸差；未观察部分可能改变结果。\n\n` : ''}|指标|得分|满分|依据|\n|---|---:|---:|---|\n${s.items.map(i=>`|${i.name}|${i.points === null ? '无法判断' : i.points.toFixed(2)}|${i.weight}|${safe(i.reason)}|`).join('\n')}\n\n## 实测尺寸（毫米）\n|项目|核桃1|核桃2|差值|\n|---|---:|---:|---:|\n${(['edge','belly','height'] as const).map((k,i)=>`|${['边宽','肚宽','桩高'][i]}|${dim(r.input.dimensions[0][k])}|${dim(r.input.dimensions[1][k])}|${dim(s.differences[k])}|`).join('\n')}\n\n## 视角对比\n${r.analysis.views.map(v=>`### ${viewName(v.view,r.input.walnutType)}\n相似：${v.similarities}\n\n差异：${v.differences}`).join('\n\n')}\n\n## 照片质量\n${r.analysis.quality.map(q=>`${viewName(q.view,r.input.walnutType)}：${q.issues.join('；') || '未报告明显拍摄问题'}`).join('\n\n')}\n\n## 细节补充（不直接扣配对分）\n${(r.input.details ?? []).filter(d=>d.text.trim() || d.image).map((d,i)=>`### 补充${i+1}\n用户描述：${d.text || '未填写'}\n对象：${{unknown:'未指定',left:'左颗',right:'右颗',both:'两颗'}[d.target]}；位置：${d.position || '未指定'}\n细节照片：${d.image ? '已提供（完整图片见JSON报告）' : '未提供'}\n模型观察：${r.analysis.details?.find(x=>x.id===d.id)?.observation || '旧报告未记录'}`).join('\n\n') || '未填写，不影响评分或可信度。'}\n\n本报告仅供配对参考，不构成品相鉴定或价格评估。照片可信度不是准确率。\n`;
 }
 function handle(name: string, fn: (...args: any[]) => Promise<any>) {
   ipcMain.handle(name, async (event, ...args) => {
@@ -72,7 +66,7 @@ function register() {
     validateInput(input);
     const { result, config } = await request(input);
     const analysis = result.analysis as Analysis;
-    const report: Report = { id: randomUUID(), createdAt: new Date().toISOString(), input, analysis, score: scoreAnalysis(analysis, input.dimensions, true), model: config.model, endpoint: config.baseUrl, protocol: config.protocol, ruleVersion: RULE_VERSION, promptVersion: PROMPT_VERSION, demo: false, usage: result.usage };
+    const report: Report = { id: randomUUID(), createdAt: new Date().toISOString(), input, analysis, score: scoreAnalysis(analysis, input.dimensions, true, input.walnutType), model: config.model, endpoint: config.baseUrl, protocol: config.protocol, ruleVersion: RULE_VERSION, promptVersion: PROMPT_VERSION, demo: false, usage: result.usage };
     await writeJson(dataPath('reports', report.id + '.json'), report);
     return report;
   });

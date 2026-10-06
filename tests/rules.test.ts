@@ -42,7 +42,7 @@ test('模型缺项、重复视角、非法等级和无照片依据均被拒绝',
 
 test('结构错误指出固定字段，空数组成员不会造成未处理异常', () => {
   assert.throws(()=>parseAnalysis(JSON.stringify({summary:'说明',views:[],metrics:[]})),/quality/);
-  const a:any=fixture();a.views[0]=null;assert.throws(()=>parseAnalysis(JSON.stringify(a)),/六个视角/);
+  const a:any=fixture();a.views[0]=null;assert.throws(()=>parseAnalysis(JSON.stringify(a)),/6个视角/);
   const b:any=fixture();b.metrics[0]=null;assert.throws(()=>parseAnalysis(JSON.stringify(b)),/指标/);
 });
 
